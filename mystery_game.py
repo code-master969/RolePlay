@@ -1,8 +1,7 @@
-import streamlit as st
+def show_intro():
+    print("欢迎来到推理游戏：《消失的古董》")
+    print("通过调查线索和和角色互动，找出古董失踪的真相。\n")
 
-st.set_page_config(page_title="推理游戏：《消失的古董》", layout="centered")
-
-# 角色和线索数据
 characters = {
     "管家王": {
         "background": "年过五十，忠诚但经济拮据，负责李先生家中事务。",
@@ -33,6 +32,26 @@ characters = {
     }
 }
 
+character_states = {
+    "管家王": {
+        "asked_relationship": False
+    }
+}
+
+def ask_butler(question):
+    if question == "你和李先生的关系如何？":
+        character_states["管家王"]["asked_relationship"] = True
+        return "我们一直很信任彼此。"
+    elif question == "你是否欠债？":
+        if character_states["管家王"]["asked_relationship"]:
+            return "这跟案子有什么关系？我为什么要欠债呢？"
+        else:
+            return "这话题有点突然，我们先聊聊别的吧。"
+    elif question == "你昨晚去哪儿了？":
+        return "我昨晚一直在整理书房，李先生可以作证。"
+    else:
+        return None
+
 clues = {
     "门窗": {
         "info": "门窗完好，没有被破坏，但门锁有撬过的痕迹。",
@@ -61,23 +80,16 @@ clues = {
         "info": "邻居张先生最近买了辆新车，资金来源成疑。",
         "unlocked": False,
         "unlock_condition": "管家行踪",
-        "is_red_herring": True
+        "is_red_herring": True  # 误导线索
     },
     "神秘电话": {
         "info": "有人半夜打电话给李先生，但内容未知。",
         "unlocked": False,
         "unlock_condition": "监控断片",
-        "is_red_herring": True
+        "is_red_herring": True  # 误导线索
     }
 }
 
-character_states = {
-    "管家王": {
-        "asked_relationship": False
-    }
-}
-
-# 解锁逻辑
 def unlock_clues():
     changed = True
     while changed:
@@ -89,51 +101,106 @@ def unlock_clues():
                     data["unlocked"] = True
                     changed = True
 
-# 显示介绍
-st.title("🕵️ 推理游戏：《消失的古董》")
-st.markdown("通过调查线索和角色互动，找出古董失踪的真相。")
-
-# 交互式选项
-option = st.sidebar.radio("请选择操作", ["调查线索", "和角色交谈", "猜凶手"])
-
-unlock_clues()
-
-if option == "调查线索":
-    st.subheader("调查线索")
-    available = [clue for clue in clues if clues[clue]["unlocked"]]
-    choice = st.selectbox("请选择要调查的线索：", available)
-    clue = clues[choice]
-    text = clue["info"]
-    if clue["is_red_herring"]:
-        text += " （提示：此线索可能是误导！）"
-    st.info(text)
-
-elif option == "和角色交谈":
-    st.subheader("和角色交谈")
-    name = st.selectbox("选择要交谈的角色：", list(characters.keys()))
-    char = characters[name]
-    st.markdown(f"**{name}的背景**：{char['background']}")
-    question = st.selectbox("你想问什么？", list(char["questions"].keys()))
-    
-    if st.button("问"):
-        if name == "管家王":
-            if question == "你和李先生的关系如何？":
-                character_states[name]["asked_relationship"] = True
-            if question == "你是否欠债？" and not character_states[name]["asked_relationship"]:
-                st.warning("这话题有点突然，我们先聊聊别的吧。")
-            else:
-                st.success(char["questions"][question])
+# 调查线索时加入重试
+def investigate():
+    print("\n可以调查的线索：")
+    for clue, data in clues.items():
+        if data["unlocked"]:
+            hint = "（可能是误导线索）" if data["is_red_herring"] else ""
+            print(f"- {clue} {hint}")
+    print() 
+    while True:
+        choice = input("请输入想调查的线索名称（输入‘返回’取消）：").strip()
+        if choice == "返回":
+            return
+        if choice in clues and clues[choice]["unlocked"]:
+            info = clues[choice]['info']
+            if clues[choice]["is_red_herring"]:
+                info += " （提示：此线索可能是误导！）"
+            print(f"\n线索信息：{info}")
+            print() 
+            break
         else:
-            st.success(char["questions"][question])
+            print("该线索尚未解锁或不存在，请重新输入。")
+            print() 
 
-elif option == "猜凶手":
-    st.subheader("猜凶手")
-    guess = st.selectbox("你猜测的凶手是谁？", list(characters.keys()))
-    clue_count = sum(1 for c in clues.values() if c["unlocked"])
-    if st.button("提交猜测"):
-        if clue_count < 4:
-            st.warning("线索不足，建议多调查和多和角色交流后再猜测。")
-        elif guess == "管家王":
-            st.success("🎉 恭喜你，猜对了！管家王因债务偷走了古董。游戏结束。")
+def talk_character():
+    print("\n可以交谈的角色：")
+    for name in characters:
+        print(f"- {name}")
+    while True:
+        choice = input("请输入想交谈的角色名称（输入‘返回’取消）：").strip()
+        if choice == "返回":
+            return
+        if choice in characters:
+            char = characters[choice]
+            print(f"\n{choice}的背景：{char['background']}")
+            print() 
+            while True:
+                ask = input("你想问什么？（输入“退出”结束交谈）\n可问问题示例：" + ", ".join(char["questions"].keys()) + "\n")
+                if ask == "退出":
+                    break
+                if choice == "管家王":
+                    answer = ask_butler(ask)
+                    if answer:
+                        print(f"{choice}回答：{answer}")
+                        print()
+                    else:
+                        print(f"{choice}看起来不想回答这个问题。")
+                        print() 
+                else:
+                    answer = char["questions"].get(ask)
+                    if answer:
+                        print(f"{choice}回答：{answer}")
+                        print()
+                    else:
+                        print(f"{choice}看起来不想回答这个问题。")
+                        print() 
+            break
         else:
-            st.error("猜错了，请继续调查！")
+            print("角色不存在，请重新输入。")
+            print()
+
+# 只统计解锁的线索数量，不包括角色hidden_clue
+def guess_suspect():
+    suspect = input("你猜测的凶手是谁？请输入名字（管家王/女儿小美/邻居张先生）：").strip()
+    unlocked_clues_count = sum(1 for c in clues.values() if c["unlocked"])
+    if unlocked_clues_count < 5:
+        print("线索不足，建议多调查和多和角色交流后再猜测。")
+        print() 
+        return False
+    if suspect == "管家王":
+        print("恭喜你，猜对了！管家王因债务偷走了古董。游戏结束。")
+        print() 
+        return True
+    else:
+        print("猜错了，请继续调查。")
+        print() 
+        return False
+
+def main():
+    show_intro()
+    while True:
+        unlock_clues()
+        print("\n请选择操作：")
+        print("1. 调查线索")
+        print("2. 和角色交谈")
+        print("3. 猜凶手")
+        print("4. 退出游戏")
+        choice = input("请输入操作编号：").strip()
+        if choice == "1":
+            investigate()
+            print()
+        elif choice == "2":
+            talk_character()
+        elif choice == "3":
+            if guess_suspect():
+                break
+        elif choice == "4":
+            print("游戏结束，欢迎下次再来！")
+            break
+        else:
+            print("输入无效，请重新选择。")
+
+if __name__ == "__main__":
+    main()
